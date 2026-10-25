@@ -412,6 +412,8 @@ interface ManagedAgentBase {
   owner?: AgentOwner;
   capabilities: AgentCapabilityFlags;
   config: AgentSessionConfig;
+  /** Explicit launch overrides, before per-opening hooks and daemon-owned variables. */
+  launchEnv?: Record<string, string>;
   runtimeInfo?: AgentRuntimeInfo;
   createdAt: Date;
   updatedAt: Date;
@@ -1319,6 +1321,7 @@ export class AgentManager {
       initialTitle: options.initialTitle,
       workspaceId: options.workspaceId,
       owner: options.owner,
+      launchEnv: options.env ? { ...options.env } : undefined,
       historyPrimed: true,
     });
     if (!agent.internal) {
@@ -1410,7 +1413,7 @@ export class AgentManager {
     const { storedConfig, launchConfig, paseoToolPolicy } = await this.prepareSessionConfig(
       mergedConfig,
       resolvedAgentId,
-      { purpose },
+      { purpose, env: record?.launchEnv },
     );
     const client = this.requireClient(handle.provider);
     const available = await client.isAvailable();
@@ -1425,7 +1428,7 @@ export class AgentManager {
       client,
       storedConfig.cwd,
       paseoToolPolicy,
-      undefined,
+      record?.launchEnv,
       {
         reason: "resume",
         purpose,
@@ -1442,6 +1445,7 @@ export class AgentManager {
     await this.requireExternalMcpSupport(session, storedConfig);
     return this.registerSession(session, storedConfig, resolvedAgentId, {
       ...options,
+      launchEnv: record?.launchEnv,
       persistence: handle,
       restoring: true,
     });
@@ -1573,6 +1577,7 @@ export class AgentManager {
     const { storedConfig, launchConfig, paseoToolPolicy } = await this.prepareSessionConfig(
       refreshConfig,
       agentId,
+      { env: existing.launchEnv },
     );
     const hadPreviousPaseoToolPolicy = this.paseoToolPolicies.has(agentId);
     const previousPaseoToolPolicy = this.paseoToolPolicies.get(agentId);
@@ -1581,7 +1586,7 @@ export class AgentManager {
       client,
       storedConfig.cwd,
       paseoToolPolicy,
-      undefined,
+      existing.launchEnv,
       { reason: "refresh", purpose: "interactive", workspaceId: existing.workspaceId },
     );
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
@@ -1626,6 +1631,7 @@ export class AgentManager {
         labels: existing.labels,
         workspaceId: existing.workspaceId,
         owner: existing.owner,
+        launchEnv: existing.launchEnv,
         createdAt: existing.createdAt,
         updatedAt: existing.updatedAt,
         lastUserMessageAt: existing.lastUserMessageAt,
@@ -3575,6 +3581,7 @@ export class AgentManager {
       publishWhenReady?: boolean;
       workspaceId?: string;
       owner?: AgentOwner;
+      launchEnv?: Record<string, string>;
     },
   ): Promise<ManagedAgent> {
     let registered = false;
@@ -3753,6 +3760,7 @@ export class AgentManager {
           persistence?: AgentPersistenceHandle;
           workspaceId?: string;
           owner?: AgentOwner;
+          launchEnv?: Record<string, string>;
         }
       | undefined;
   }): ActiveManagedAgent {
@@ -3763,6 +3771,7 @@ export class AgentManager {
       cwd: config.cwd,
       workspaceId: options?.workspaceId,
       owner: options?.owner,
+      launchEnv: options?.launchEnv,
       session,
       capabilities: session.capabilities,
       config,
