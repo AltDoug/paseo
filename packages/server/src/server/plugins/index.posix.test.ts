@@ -883,7 +883,7 @@ export default function contribute(server: PluginServerContext) {
     await service.stopAllPlugins();
   }, 30_000);
 
-  it("keeps the previous Git installation and reaps it on the next update", async () => {
+  it("preserves local Git commits and dirty files across repeated updates", async () => {
     const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
     roots.push(home);
     const repository = await mkdtemp(path.join(tmpdir(), "paseo-plugin-repository-"));
@@ -915,8 +915,17 @@ export default function contribute(server: PluginServerContext) {
     const pluginRoot = path.dirname(path.dirname(installed.path));
     expect(await readdir(pluginRoot)).toHaveLength(1);
 
-    // Work that exists only inside the checkout: an update must not take it away.
+    // Both committed and uncommitted work exist only in the installed checkout.
+    await runGitCommand(["config", "user.name", "Paseo Tests"], { cwd: installed.path });
+    await runGitCommand(["config", "user.email", "paseo@example.test"], { cwd: installed.path });
+    await writeFile(path.join(installed.path, "local.txt"), "unpushed commit");
+    await runGitCommand(["add", "local.txt"], { cwd: installed.path });
+    await runGitCommand(["commit", "-m", "local work"], { cwd: installed.path });
+    const localCommit = (
+      await runGitCommand(["rev-parse", "HEAD"], { cwd: installed.path })
+    ).stdout.trim();
     await writeFile(path.join(installed.path, "marker.txt"), "uncommitted work");
+    await writeFile(path.join(installed.path, "untracked.txt"), "untracked work");
     await writeFile(path.join(repository, "marker.txt"), "second");
     await runGitCommand(["add", "-A"], { cwd: repository });
     await runGitCommand(["commit", "-m", "second"], { cwd: repository });
@@ -929,18 +938,28 @@ export default function contribute(server: PluginServerContext) {
       await readFile(path.join(pluginRoot, retired[0]!, "checkout", "marker.txt"), "utf8"),
     ).toBe("uncommitted work");
 
-    // A second update replaces the kept copy with the one it just retired.
+    // Later updates must not delete the only copy of earlier local work.
     await writeFile(path.join(repository, "marker.txt"), "third");
     await runGitCommand(["add", "-A"], { cwd: repository });
     await runGitCommand(["commit", "-m", "third"], { cwd: repository });
     await applyReviewedUpdate(service, "kept-update");
 
-    const reaped = (await readdir(pluginRoot)).filter((entry) => /\.old-\d+$/.test(entry));
-    expect(reaped).toHaveLength(1);
-    expect(await readdir(pluginRoot)).toHaveLength(2);
+    const retained = (await readdir(pluginRoot)).filter((entry) => /\.old-\d+$/.test(entry));
+    expect(retained).toHaveLength(2);
+    expect(await readdir(pluginRoot)).toHaveLength(3);
+    const preserved = path.join(pluginRoot, retired[0]!, "checkout");
+    expect(await readFile(path.join(preserved, "marker.txt"), "utf8")).toBe("uncommitted work");
+    expect(await readFile(path.join(preserved, "untracked.txt"), "utf8")).toBe("untracked work");
+    expect((await runGitCommand(["rev-parse", "HEAD"], { cwd: preserved })).stdout.trim()).toBe(
+      localCommit,
+    );
     expect(
-      await readFile(path.join(pluginRoot, reaped[0]!, "checkout", "marker.txt"), "utf8"),
-    ).toBe("second");
+      (await runGitCommand(["show", `${localCommit}:local.txt`], { cwd: preserved })).stdout.trim(),
+    ).toBe("unpushed commit");
+    const second = retained.find((entry) => entry !== retired[0])!;
+    expect(await readFile(path.join(pluginRoot, second, "checkout", "marker.txt"), "utf8")).toBe(
+      "second",
+    );
 
     // Uninstalling still clears the plugin root, kept copies included.
     await service.removePlugin("kept-update");
