@@ -1,3 +1,4 @@
+import { expectPickerSelected } from "../support/helpers/new-workspace";
 import {
   hideCreationLifecycle,
   holdWorkspaceProvisioning,
@@ -301,6 +302,39 @@ test("a failed workspace returns to New workspace with the prompt and its error"
   await creation.submitRepeatedly("Create", prompt);
   await creation.expectReturnedToNewWorkspace(prompt, "Provisioning outcome is uncertain for test");
   await page.screenshot({ path: testInfo.outputPath("failed-workspace-returned.png") });
+});
+
+test("a failed workspace preserves its non-default branch through resubmission", async ({
+  creation,
+  provisioningFailure,
+  page,
+}) => {
+  const prompt = "Keep the selected worktree base when provisioning fails.";
+  const provisioning = await holdWorkspaceProvisioning(page);
+  await creation.openWorkspaceForm("worktree");
+  await creation.selectWorktreeBranch("recovery-base");
+  await provisioningFailure.arm();
+  await creation.submitPrompt(prompt, "Create");
+  const first = await provisioning.waitForRequest();
+  expect(first.source).toMatchObject({
+    kind: "worktree",
+    action: "branch-off",
+    refName: "refs/heads/recovery-base",
+  });
+  provisioning.release();
+  await creation.expectReturnedToNewWorkspace(prompt, "Provisioning outcome is uncertain for test");
+
+  await expectPickerSelected(page, "recovery-base");
+  await creation.resubmitWorkspace();
+  const second = await provisioning.waitForRequests(2);
+  expect(second.source).toMatchObject({
+    kind: "worktree",
+    action: "branch-off",
+    refName: "refs/heads/recovery-base",
+  });
+  provisioning.release();
+  await creation.expectOneCreatedWorkspace();
+  await creation.expectAgentCount(1);
 });
 
 test("a failed workspace keeps its queued follow-up and unsent text through resubmission", async ({

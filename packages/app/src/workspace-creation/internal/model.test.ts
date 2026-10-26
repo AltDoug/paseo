@@ -208,7 +208,7 @@ describe("creation lifecycle ownership", () => {
     expect(lifecycle).toEqual(["submitted:preparing", "complete:complete", "adopted:complete"]);
   });
 
-  it("does not regress receipt revisions or release overlays on empty directory snapshots", async () => {
+  it("keeps presentation stable across receipt updates and empty directory snapshots", async () => {
     const response = deferred<{}>();
     const observed =
       deferred<
@@ -234,11 +234,16 @@ describe("creation lifecycle ownership", () => {
       phase: "workspace_ready" as const,
       error: null,
     };
-    onEvent(event);
+    const pendingSnapshot = model.getSnapshot();
+    let publications = 0;
+    const stop = model.subscribe(() => publications++);
     onEvent({ ...event, revision: 1, phase: "accepted" });
+    onEvent(event);
+    expect(model.getSnapshot()).toBe(pendingSnapshot);
+    expect(publications).toBe(0);
+    stop();
     model.observeResources("host", new Set(), new Set());
     expect(model.getWorkspace("host", attempt.workspaceId)).toMatchObject({
-      revision: 3,
       workspaceObserved: false,
       agentObserved: false,
     });

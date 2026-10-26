@@ -10,6 +10,8 @@ import { createAgentTabFromMenu } from "./workspace-tabs";
 import {
   connectNewWorkspaceDaemonClient,
   openNewWorkspaceComposer,
+  openStartingRefPicker,
+  startingRefRow,
   selectWorkspaceIsolation,
   loadSessionMessageReaders,
 } from "./new-workspace";
@@ -190,7 +192,10 @@ export async function createCreationScenario(page: Page) {
   const requests = await observeCreationRequests(page);
   const project = await seedWorkspace({
     repoPrefix: "creation-idempotency-",
-    repo: { files: [{ path: "nested/context.txt", content: "Nested agent working directory" }] },
+    repo: {
+      files: [{ path: "nested/context.txt", content: "Nested agent working directory" }],
+      branches: ["recovery-base"],
+    },
   });
   let workspaceId = project.workspaceId;
   const evictionWorkspaceIds = new Set<string>();
@@ -268,6 +273,10 @@ export async function createCreationScenario(page: Page) {
       await waitForSidebarHydration(page);
       await openNewWorkspaceComposer(page, project);
       await selectWorkspaceIsolation(page, isolation);
+    },
+    async selectWorktreeBranch(name: string) {
+      await openStartingRefPicker(page);
+      await startingRefRow(page, `${name}, local branch`).click();
     },
     async openAgentDraft() {
       await gotoWorkspace(page, project.workspaceId);

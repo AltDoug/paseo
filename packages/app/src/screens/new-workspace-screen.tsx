@@ -1,7 +1,7 @@
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import type { CreateWorkspaceRequestOptions } from "@getpaseo/client/internal/daemon-client";
 import type { AgentSnapshotPayload, CreationSnapshot } from "@getpaseo/protocol/messages";
-import { submitWorkspaceChat, takeWorkspaceCreationError } from "@/workspace-creation";
+import { submitWorkspaceChat, takeWorkspaceCreationFailure } from "@/workspace-creation";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -631,13 +631,6 @@ export function NewWorkspaceScreen({
     projects: projectIconTargets,
   });
   const draftKey = buildNewWorkspaceDraftKey(draftId);
-  // A chat whose workspace could not be created returns here with its draft.
-  useEffect(() => {
-    const message = takeWorkspaceCreationError(draftKey);
-    if (!message) return;
-    setErrorMessage(message);
-    toast.error(message);
-  }, [draftKey, toast]);
   const forkDraftSetup = usePendingWorkspaceDraftSetup(draftId);
   const draftContextScopeKey = useDraftWorkspaceAttachmentScopeKey(draftId);
   const visibleDraftContextScopeKeys = useMemo(
@@ -659,6 +652,14 @@ export function NewWorkspaceScreen({
     initialPickerSelectionState,
   );
   const selectedItem = pickerSelection.selectedItem;
+
+  useEffect(() => {
+    const failure = takeWorkspaceCreationFailure(draftKey);
+    if (!failure) return;
+    dispatchPickerSelection({ type: "draft-restored", item: failure.selectedItem });
+    setErrorMessage(failure.error);
+    toast.error(failure.error);
+  }, [draftKey, toast]);
 
   const handleForgeChangeRequestDetected = useCallback(() => {
     dispatchPickerSelection({ type: "pr-detected" });

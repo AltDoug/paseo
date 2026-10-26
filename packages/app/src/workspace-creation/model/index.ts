@@ -34,7 +34,6 @@ export interface CreationAttempt extends Omit<Submission, SubmissionHandlers> {
   agentId: string;
   clientMessageId: string;
   phase: "preparing" | "creating" | "complete";
-  revision: number;
   workspaceObserved: boolean;
   agentObserved: boolean;
 }
@@ -45,8 +44,6 @@ interface Result {
 }
 interface Operation extends Pick<Submission, "onComplete" | "onWorkspaceFailed" | "onAgentFailed"> {
   attempt: CreationAttempt;
-  prepare: Submission["prepare"] | null;
-  request?: CreateWorkspaceRequestOptions;
   /** The host's latest account of this creation. */
   creation?: CreationSnapshot;
   running?: Promise<void>;
@@ -84,7 +81,7 @@ export function createWorkspaceCreationModel(dependencies: {
   const listeners = new Set<() => void>();
   let snapshot: readonly CreationAttempt[] = [];
   const operations = new Map<string, Operation>();
-  // Current submissions remain owned until resolved or dismissed. Adopted creations
+  // Current submissions remain owned until settled and adopted. Adopted creations
   // only need a bounded receipt to absorb duplicate commands from retained forms.
   const receipts = new Map<string, CreationAttempt>();
   const intentKey = (serverId: string, key: string) =>
@@ -119,11 +116,9 @@ export function createWorkspaceCreationModel(dependencies: {
     patch(operation, { phase: "complete" });
     dependencies.onComplete?.(operation.attempt);
     const onComplete = operation.onComplete;
-    operation.prepare = null;
     operation.onComplete = undefined;
     operation.onWorkspaceFailed = undefined;
     operation.onAgentFailed = undefined;
-    operation.request = undefined;
     onComplete?.();
     retire(operation);
   }
@@ -141,30 +136,26 @@ export function createWorkspaceCreationModel(dependencies: {
       operation.onAgentFailed?.(operation.attempt, error, operation.creation?.workspace);
     else operation.onWorkspaceFailed?.(operation.attempt, error);
   }
-  async function run(operation: NonNullable<ReturnType<typeof operations.get>>) {
+  async function run(operation: Operation, prepare: Submission["prepare"]) {
     try {
-      if (!operation.request) {
-        if (!operation.prepare) throw new Error("Completed creation cannot be submitted again");
-        const prepared = await operation.prepare();
-        operation.request = captureCreationInput({
-          ...prepared,
-          workspaceId: operation.attempt.workspaceId,
-          idempotencyKey: operation.attempt.operationKey,
-          agent: {
-            ...prepared.agent,
-            agentId: operation.attempt.agentId,
-            clientMessageId: operation.attempt.clientMessageId,
-          },
-        });
-      }
+      const prepared = await prepare();
+      const request = captureCreationInput({
+        ...prepared,
+        workspaceId: operation.attempt.workspaceId,
+        idempotencyKey: operation.attempt.operationKey,
+        agent: {
+          ...prepared.agent,
+          agentId: operation.attempt.agentId,
+          clientMessageId: operation.attempt.clientMessageId,
+        },
+      });
       patch(operation, { phase: "creating" });
       const result = await dependencies.execute(
         {
-          ...captureCreationInput(operation.request),
+          ...request,
+          // CreationClient owns receipt ordering; progress alone does not change presentation.
           onEvent: (event) => {
-            if (event.revision <= operation.attempt.revision) return;
             operation.creation = event;
-            patch(operation, { revision: event.revision });
           },
         },
         operation.attempt.serverId,
@@ -181,8 +172,8 @@ export function createWorkspaceCreationModel(dependencies: {
       operation.running = undefined;
     }
   }
-  function start(operation: NonNullable<ReturnType<typeof operations.get>>) {
-    operation.running = Promise.resolve().then(() => run(operation));
+  function start(operation: Operation, prepare: Submission["prepare"]) {
+    operation.running = Promise.resolve().then(() => run(operation, prepare));
   }
   return {
     subscribe(listener: () => void) {
@@ -204,12 +195,10 @@ export function createWorkspaceCreationModel(dependencies: {
         key,
         ...dependencies.identities(),
         phase: "preparing",
-        revision: -1,
         workspaceObserved: false,
         agentObserved: false,
       };
       const operation: Operation = {
-        prepare,
         onComplete,
         onWorkspaceFailed,
         onAgentFailed,
@@ -218,7 +207,7 @@ export function createWorkspaceCreationModel(dependencies: {
       operations.set(key, operation);
       dependencies.onSubmitted?.(operation.attempt);
       publish();
-      start(operation);
+      start(operation, prepare);
       return operation.attempt;
     },
     observeResources(

@@ -6,4 +6,4 @@ export {
   isAgentReadyForPrompts,
   useIsAgentReadyForPrompts,
 } from "./runtime";
-export { submitWorkspaceChat, takeWorkspaceCreationError } from "./submit";
+export { submitWorkspaceChat, takeWorkspaceCreationFailure } from "./submit";

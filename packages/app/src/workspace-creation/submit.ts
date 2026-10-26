@@ -64,14 +64,18 @@ interface SubmitWorkspaceChatInput extends DraftCleanupInput {
   persistPreferences: () => Promise<unknown>;
 }
 
-// Failed creations return to New workspace, whose error lives in screen state.
-const workspaceErrors = new Map<string, string>();
+interface WorkspaceCreationFailure {
+  error: string;
+  selectedItem: PickerItem | null;
+}
 
-/** The error of a creation that returned to the New workspace draft with this key, once. */
-export function takeWorkspaceCreationError(draftKey: string): string | null {
-  const error = workspaceErrors.get(draftKey) ?? null;
-  workspaceErrors.delete(draftKey);
-  return error;
+// The returned draft takes back its form selection and ordinary submit error together.
+const workspaceFailures = new Map<string, WorkspaceCreationFailure>();
+
+export function takeWorkspaceCreationFailure(draftKey: string): WorkspaceCreationFailure | null {
+  const failure = workspaceFailures.get(draftKey) ?? null;
+  workspaceFailures.delete(draftKey);
+  return failure;
 }
 
 /**
@@ -213,7 +217,7 @@ export function submitWorkspaceChat(input: SubmitWorkspaceChatInput) {
     projectName: project.projectName,
     text: payload.text,
     onWorkspaceFailed: (attempt, error) => {
-      workspaceErrors.set(input.draftKey, error);
+      workspaceFailures.set(input.draftKey, { error, selectedItem });
       if (input.returnDraftId) restoreSubmittedContext(input.returnDraftId, payload);
       // The New workspace composer owns the follow-ups until the form is submitted again.
       transferComposerFollowUps(serverId, attempt.agentId, input.draftKey);

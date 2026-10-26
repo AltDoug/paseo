@@ -364,8 +364,8 @@ so it cannot erase newer input.
 A failed creation goes to the existing owner of whatever the host did not create, using
 the receipt's resources and `failedStage`. Creation has no failure UI of its own:
 
-- No workspace: the app returns to New workspace with the submitted draft and shows the
-  error the way that screen shows its own submit errors.
+- No workspace: the app returns to New workspace with the submitted draft and checkout
+  selection, and shows the error the way that screen shows its own submit errors.
 - Workspace but no agent: the agent tab becomes an existing-workspace agent draft holding
   the prompt, in the abandoned create-flow state. Its error and Send retry are that draft's
   own; the retry creates the agent in the kept workspace.
