@@ -62,6 +62,7 @@ export function useSidebarProjectStatusBucket(input: {
   enabled: boolean;
 }): SidebarStateBucket | null {
   const { workspaces, enabled } = input;
+  const workspaceCreations = useWorkspaceCreations();
   const pendingCreateAttempts = useStoreWithEqualityFn(
     useCreateFlowStore,
     (state) => state.pendingByDraftId,
@@ -75,9 +76,10 @@ export function useSidebarProjectStatusBucket(input: {
         workspaces,
         sessions: state.sessions,
         pendingCreateAttempts,
+        workspaceCreations,
       });
     },
-    [enabled, pendingCreateAttempts, workspaces],
+    [enabled, pendingCreateAttempts, workspaces, workspaceCreations],
   );
 
   return useStoreWithEqualityFn(useSessionStore, selector, Object.is);

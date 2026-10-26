@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
 import { resolveCreateAgentIntent } from "./intent.js";
@@ -33,7 +34,7 @@ describe("resolveCreateAgentIntent", () => {
         throw new Error("Unexpected workspace creation");
       },
     });
-    expect(intent.cwd).toBe("/new/packages/app");
+    expect(intent.cwd).toBe(resolve("/new", "packages/app"));
     expect(intent.workspaceId).toBe("workspace-new");
     expect(intent.parentAgentId).toBe("parent");
   });

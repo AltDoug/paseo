@@ -1151,6 +1151,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   const {
     textSource,
     editText,
+    flush,
     replaceText,
     textReplacement,
     attachments,
@@ -1164,6 +1165,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     (): AgentInputDraft => ({
       textSource,
       editText,
+      flush,
       replaceText,
       textReplacement,
       attachments,
@@ -1176,6 +1178,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     [
       textSource,
       editText,
+      flush,
       replaceText,
       textReplacement,
       attachments,

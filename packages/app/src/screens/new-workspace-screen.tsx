@@ -688,6 +688,7 @@ export function NewWorkspaceScreen({
     cwd: selectedSourceDirectory ?? "",
   });
 
+  const flushChatDraft = chatDraft.flush;
   const worktreeSupport = selectedProject
     ? getWorktreeSupportForHostProject({ project: selectedProject, serverId: selectedServerId })
     : "unsupported";
@@ -970,6 +971,8 @@ export function NewWorkspaceScreen({
           return;
         }
 
+        // Capture the submitted version after publishing any last-keystroke edit.
+        flushChatDraft();
         const attempt = submitWorkspaceChat({
           serverId: selectedServerId,
           key: creationIdentity.draftId,
@@ -1013,6 +1016,7 @@ export function NewWorkspaceScreen({
       draftContextScopeKey,
       creationIdentity,
       chatDraft.clear,
+      flushChatDraft,
       draftKey,
       ensureWorkspace,
       forkDraftSetup,

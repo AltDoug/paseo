@@ -55,6 +55,7 @@ export function useSidebarWorkspaceEntries(
         placements,
         sessions,
         pendingCreateAttempts,
+        workspaceCreations: creations,
         previousEntries: previousEntriesRef.current,
       }),
     );
