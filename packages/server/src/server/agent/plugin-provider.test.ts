@@ -229,6 +229,149 @@ function eventsOfType(events: AgentStreamEvent[], type: AgentStreamEvent["type"]
   return events.filter((event) => event.type === type);
 }
 
+function createRewindProviderHarness(options: { reuseAnswerId?: boolean } = {}) {
+  const nativeMessages: string[] = [];
+  const harness = createProviderHarness({
+    capabilities: [...CAPABILITIES, "session.revert.conversation", "session.revert.files"],
+    async handleInput(input, emit) {
+      if (input.type === "session.prompt") {
+        if (input.prompt.input.type !== "message") throw new Error("Expected a message");
+        const text = input.prompt.input.content
+          .flatMap((part) => (part.type === "text" ? [part.text] : []))
+          .join("");
+        nativeMessages.push(text);
+        const turnId = `turn-${text}`;
+        emit({
+          type: "session.prompt_result",
+          sessionId: input.sessionId,
+          clientMessageId: input.prompt.clientMessageId,
+          result: { type: "turn", turnId },
+        });
+        emit({ type: "session.turn", sessionId: input.sessionId, turnId, state: "started" });
+        emit({
+          type: "timeline.item",
+          sessionId: input.sessionId,
+          item: {
+            type: "user_message",
+            id: `user-${text}`,
+            text,
+            clientMessageId: input.prompt.clientMessageId,
+            revertToken: text,
+          },
+        });
+        emit({
+          type: "timeline.item",
+          sessionId: input.sessionId,
+          item: {
+            type: "assistant_message",
+            id: options.reuseAnswerId ? `answer-${nativeMessages.length}` : `answer-${text}`,
+            text: `Reply ${text}`,
+          },
+        });
+        emit({ type: "session.turn", sessionId: input.sessionId, turnId, state: "completed" });
+        return true;
+      }
+      if (input.type === "session.revert") {
+        if (input.scope !== "files")
+          nativeMessages.splice(nativeMessages.indexOf(String(input.token)));
+        emit({ type: "request.completed", requestId: input.requestId });
+        return true;
+      }
+      return false;
+    },
+  });
+  return { ...harness, nativeMessages };
+}
+
+async function withRewindAgent(
+  run: (context: {
+    manager: AgentManager;
+    agentId: string;
+    nativeMessages: string[];
+    messages: () => string[];
+  }) => Promise<void>,
+) {
+  const harness = createRewindProviderHarness();
+  const logger = createTestLogger();
+  const registry = new PluginAgentClientRegistry(logger);
+  registry.replace([harness.registration]);
+  const manager = new AgentManager({
+    logger,
+    clients: registry.clients(),
+    providerDefinitions: registry.definitions(),
+  });
+  const agent = await manager.createAgent(
+    { provider: harness.registration.id, cwd: tmpdir() },
+    undefined,
+    { workspaceId: undefined },
+  );
+  const messages = () =>
+    manager
+      .getTimeline(agent.id)
+      .flatMap((item) =>
+        item.type === "user_message" || item.type === "assistant_message" ? [item.text] : [],
+      );
+  try {
+    await manager.runAgent(agent.id, "A", { clientMessageId: "client-A" });
+    await manager.runAgent(agent.id, "B", { clientMessageId: "client-B" });
+    await manager.runAgent(agent.id, "C", { clientMessageId: "client-C" });
+    expect(messages()).toEqual(["A", "Reply A", "B", "Reply B", "C", "Reply C"]);
+    await run({ manager, agentId: agent.id, nativeMessages: harness.nativeMessages, messages });
+  } finally {
+    await manager.closeAgent(agent.id);
+    await registry.shutdown();
+  }
+}
+
+test("conversation rewind discards withdrawn plugin turns before and after a replacement prompt", async () => {
+  await withRewindAgent(async ({ manager, agentId, nativeMessages, messages }) => {
+    await manager.rewind(agentId, "user-B", "conversation");
+    const afterRewind = messages();
+    expect(nativeMessages).toEqual(["A"]);
+    await manager.runAgent(agentId, "D", { clientMessageId: "client-D" });
+    const afterReplacement = messages();
+    expect(nativeMessages).toEqual(["A", "D"]);
+    expect({ afterRewind, afterReplacement }).toEqual({
+      afterRewind: ["A", "Reply A"],
+      afterReplacement: ["A", "Reply A", "D", "Reply D"],
+    });
+  });
+});
+
+test("file-only plugin rewind preserves the conversation before and after a replacement prompt", async () => {
+  await withRewindAgent(async ({ manager, agentId, nativeMessages, messages }) => {
+    await manager.rewind(agentId, "user-B", "files");
+    expect(nativeMessages).toEqual(["A", "B", "C"]);
+    expect(messages()).toEqual(["A", "Reply A", "B", "Reply B", "C", "Reply C"]);
+    await manager.runAgent(agentId, "D", { clientMessageId: "client-D" });
+    expect(messages()).toEqual(["A", "Reply A", "B", "Reply B", "C", "Reply C", "D", "Reply D"]);
+  });
+});
+
+test("plugin rewind restores translation state when a replacement reuses a discarded item id", async () => {
+  const harness = createRewindProviderHarness({ reuseAnswerId: true });
+  const registry = new PluginAgentClientRegistry(createTestLogger());
+  registry.replace([harness.registration]);
+  const client = registry.clients()[harness.registration.id]!;
+  const session = await client.createSession({ provider: harness.registration.id, cwd: tmpdir() });
+  const live: AgentStreamEvent[] = [];
+  try {
+    await session.run("A");
+    await session.run("B");
+    await session.revertConversation!({ messageId: "user-B" });
+    session.subscribe((event) => live.push(event));
+    await session.run("B revised");
+    const assistant = live.flatMap((event) =>
+      event.type === "timeline" && event.item.type === "assistant_message" ? [event.item.text] : [],
+    );
+    expect(harness.nativeMessages).toEqual(["A", "B revised"]);
+    expect(assistant).toEqual(["Reply B revised"]);
+  } finally {
+    await session.close();
+    await registry.shutdown();
+  }
+});
+
 function openNestedChildren(rootSessionId: string, emit: (event: ProviderEvent) => void) {
   for (const [sessionId, parentSessionId] of [
     ["a", rootSessionId],
