@@ -28,8 +28,8 @@ describe.skipIf(process.platform === "win32")("materializeProviderImage", () => 
     }
   });
 
-  test("writes image attachments under a private directory in the paseo home", () => {
-    const materialized = materializeProviderImage({
+  test("writes image attachments under a private directory in the paseo home", async () => {
+    const materialized = await materializeProviderImage({
       data: "YWJjMTIz",
       mimeType: "image/png",
     });
