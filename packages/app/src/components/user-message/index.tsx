@@ -80,6 +80,8 @@ export function MessageSender({
       size="sm"
       leftIcon={renderProviderIcon}
       style={styles.sender}
+      textStyle={styles.senderText}
+      numberOfLines={1}
       disabled={!host}
       onPress={openSender}
     >
@@ -90,7 +92,8 @@ export function MessageSender({
 
 const styles = StyleSheet.create((theme) => ({
   body: { flexShrink: 0 },
-  sender: { paddingRight: 0, borderRightWidth: 0 },
+  sender: { paddingRight: 0, borderRightWidth: 0, maxWidth: "100%" },
+  senderText: { flexShrink: 1 },
   toggle: { alignSelf: "flex-start", paddingHorizontal: 0, minHeight: 0, borderWidth: 0 },
   expandedToggle: { marginTop: theme.spacing[2] },
   fade: { position: "absolute", bottom: 0, left: 0, right: 0, height: theme.spacing[12] },
