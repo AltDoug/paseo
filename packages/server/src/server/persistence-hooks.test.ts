@@ -214,3 +214,14 @@ describe("persistence hooks", () => {
     expect(handle).toBeNull();
   });
 });
+
+test("restores optional MCP requirements for continuation", () => {
+  const record = createRecord({
+    config: {
+      mcpServerRequirements: { hub: "optional" },
+      mcpServers: { hub: { type: "http", url: "https://hub.test/mcp" } },
+    },
+  });
+  expect(buildConfigOverrides(record).mcpServerRequirements).toEqual({ hub: "optional" });
+  expect(buildSessionConfig(record)?.mcpServerRequirements).toEqual({ hub: "optional" });
+});
