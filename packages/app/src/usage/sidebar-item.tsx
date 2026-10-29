@@ -34,18 +34,13 @@ import {
 import { UsageModal } from "./usage-modal";
 
 /** Each summary window with data on the usage host, under its source; empty while none has. */
-function useUsageSummary(requestReports = true): readonly PinnedUsageSource[] {
+export function useUsageSummary(): readonly PinnedUsageSource[] {
   const { t } = useTranslation();
   const { inSidebar } = useUsageInSidebar();
   const serverId = useUsageHostId();
-  const reports = useUsageHostReports(inSidebar ? serverId : null, requestReports);
+  const reports = useUsageHostReports(inSidebar ? serverId : null);
   const { preferences } = useUsageDisplay(reports);
   return useMemo(() => resolvePinnedUsage(reports, preferences, t), [preferences, reports, t]);
-}
-
-/** Whether the sidebar Usage item has anything to show. */
-export function useHasUsageSummary(): boolean {
-  return useUsageSummary().length > 0;
 }
 
 /**
@@ -53,13 +48,10 @@ export function useHasUsageSummary(): boolean {
  * while no summary window has data, since the footer's Usage icon already opens Usage.
  * Pressing it opens the Usage modal.
  */
-export function UsageSidebarItem() {
+export function UsageSidebarItem({ sources }: { sources: readonly PinnedUsageSource[] }) {
   const { t } = useTranslation();
   const label = t(builtinSidebarNavLabelKey("usage"));
   const openUsage = useOpenSidebarUsage();
-  // The row mounts after reports arrive; observing without requesting avoids
-  // the fetch-query policy’s unconditional refetch on mount.
-  const sources = useUsageSummary(false);
   if (sources.length === 0) return null;
   return <PinnedUsageTrigger label={label} sources={sources} onPress={openUsage} />;
 }
