@@ -766,18 +766,20 @@ async function recordedTerminalPids(paseoHome: string): Promise<Map<string, numb
   return pids;
 }
 
-it("never adopts a live worker's terminals after a kill cleanup it could not finish, even once the worker rewrites its record", async () => {
-  const paseoHome = createTemporaryHome();
-  const cwd = mkdtempSync(join(tmpdir(), "worker-terminal-manager-unfinished-kill-"));
-  temporaryDirs.push(cwd);
-  const first = await startRealWorkerManager({ paseoHome });
-  manager = first;
-  const exitRequestPath = join(cwd, "exit-requested");
-  const exitObservedPath = join(cwd, "exit-observed");
-  const ending = await first.createTerminal({
-    workspaceId: "ws-unfinished-kill",
-    cwd,
-    ...nodeTerminalCommand(`
+it.each(Array.from({ length: process.platform === "win32" ? 20 : 1 }, (_, index) => index))(
+  "never adopts a live worker's terminals after a kill cleanup it could not finish, even once the worker rewrites its record (diagnostic %i)",
+  async () => {
+    const paseoHome = createTemporaryHome();
+    const cwd = mkdtempSync(join(tmpdir(), "worker-terminal-manager-unfinished-kill-"));
+    temporaryDirs.push(cwd);
+    const first = await startRealWorkerManager({ paseoHome });
+    manager = first;
+    const exitRequestPath = join(cwd, "exit-requested");
+    const exitObservedPath = join(cwd, "exit-observed");
+    const ending = await first.createTerminal({
+      workspaceId: "ws-unfinished-kill",
+      cwd,
+      ...nodeTerminalCommand(`
       const { existsSync, writeFileSync } = require("node:fs");
       setInterval(() => {
         if (existsSync(${JSON.stringify(exitRequestPath)})) {
@@ -786,53 +788,54 @@ it("never adopts a live worker's terminals after a kill cleanup it could not fin
         }
       }, 25);
     `),
-  });
-  const remaining = await first.createTerminal({
-    workspaceId: "ws-unfinished-kill",
-    cwd,
-    ...nodeTerminalCommand("setInterval(() => {}, 1000);"),
-  });
-  const pids = await recordedTerminalPids(paseoHome);
-  const endingPid = pids.get(ending.id)!;
-  const remainingPid = pids.get(remaining.id)!;
-
-  // A kill cleanup whose process table read fails signals nothing and leaves the worker live.
-  const inspector = createTerminalWorkerProcessInspector();
-  await expect(
-    reapTerminalWorkers({
-      paseoHome,
-      inspector: { ...inspector, listProcesses: () => Promise.reject(new Error("ps timed out")) },
-    }),
-  ).rejects.toBeInstanceOf(TerminalCleanupNotConfirmedError);
-  await first.detach();
-  expect((await readUnconfirmedTerminalCleanup(paseoHome)).length).toBeGreaterThan(0);
-
-  // One terminal ends on its own: the live worker rewrites its record from memory.
-  writeFileSync(exitRequestPath, "");
-  try {
-    await waitForCondition(
-      async () => !(await recordedTerminalPids(paseoHome)).has(ending.id),
-      10000,
-    );
-  } catch (error) {
-    const workerLog = readFileSync(terminalWorkerLogPath(paseoHome), "utf8");
-    console.error("CI terminal exit diagnostics", {
-      exitObserved: existsSync(exitObservedPath),
-      endingAlive: isProcessAlive(endingPid),
-      remainingAlive: isProcessAlive(remainingPid),
-      recordWriteErrors: workerLog.match(/CI terminal record write failed: \w+/g) ?? [],
     });
-    throw error;
-  }
-  expect((await readUnconfirmedTerminalCleanup(paseoHome)).length).toBeGreaterThan(0);
+    const remaining = await first.createTerminal({
+      workspaceId: "ws-unfinished-kill",
+      cwd,
+      ...nodeTerminalCommand("setInterval(() => {}, 1000);"),
+    });
+    const pids = await recordedTerminalPids(paseoHome);
+    const endingPid = pids.get(ending.id)!;
+    const remainingPid = pids.get(remaining.id)!;
 
-  manager = await startRealWorkerManager({ paseoHome });
+    // A kill cleanup whose process table read fails signals nothing and leaves the worker live.
+    const inspector = createTerminalWorkerProcessInspector();
+    await expect(
+      reapTerminalWorkers({
+        paseoHome,
+        inspector: { ...inspector, listProcesses: () => Promise.reject(new Error("ps timed out")) },
+      }),
+    ).rejects.toBeInstanceOf(TerminalCleanupNotConfirmedError);
+    await first.detach();
+    expect((await readUnconfirmedTerminalCleanup(paseoHome)).length).toBeGreaterThan(0);
 
-  expect(manager.getTerminal(remaining.id)).toBeUndefined();
-  expect(await manager.getTerminals(cwd)).toEqual([]);
-  await waitForCondition(() => !isProcessAlive(remainingPid), 10000);
-  expect(await readUnconfirmedTerminalCleanup(paseoHome)).toEqual([]);
-});
+    // One terminal ends on its own: the live worker rewrites its record from memory.
+    writeFileSync(exitRequestPath, "");
+    try {
+      await waitForCondition(
+        async () => !(await recordedTerminalPids(paseoHome)).has(ending.id),
+        10000,
+      );
+    } catch (error) {
+      const workerLog = readFileSync(terminalWorkerLogPath(paseoHome), "utf8");
+      console.error("CI terminal exit diagnostics", {
+        exitObserved: existsSync(exitObservedPath),
+        endingAlive: isProcessAlive(endingPid),
+        remainingAlive: isProcessAlive(remainingPid),
+        recordWriteErrors: workerLog.match(/CI terminal record write failed: \w+/g) ?? [],
+      });
+      throw error;
+    }
+    expect((await readUnconfirmedTerminalCleanup(paseoHome)).length).toBeGreaterThan(0);
+
+    manager = await startRealWorkerManager({ paseoHome });
+
+    expect(manager.getTerminal(remaining.id)).toBeUndefined();
+    expect(await manager.getTerminals(cwd)).toEqual([]);
+    await waitForCondition(() => !isProcessAlive(remainingPid), 10000);
+    expect(await readUnconfirmedTerminalCleanup(paseoHome)).toEqual([]);
+  },
+);
 
 // The worker's own `ps`, delayed: a program that exits while the worker reads its birth time
 // lands its exit in the middle of creation. Only the worker launched while this PATH is set sees
