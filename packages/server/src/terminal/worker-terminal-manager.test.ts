@@ -43,6 +43,7 @@ import {
   listTerminalWorkerRecords,
   readTerminalWorkerRecord,
   terminalWorkerDirectory,
+  terminalWorkerLogPath,
   type TerminalWorkerRecord,
 } from "./terminal-worker-record.js";
 import { TERMINAL_WORKER_PROTOCOL_OVERRIDE_ENV } from "./terminal-worker-protocol.js";
@@ -772,13 +773,17 @@ it("never adopts a live worker's terminals after a kill cleanup it could not fin
   const first = await startRealWorkerManager({ paseoHome });
   manager = first;
   const exitRequestPath = join(cwd, "exit-requested");
+  const exitObservedPath = join(cwd, "exit-observed");
   const ending = await first.createTerminal({
     workspaceId: "ws-unfinished-kill",
     cwd,
     ...nodeTerminalCommand(`
-      const { existsSync } = require("node:fs");
+      const { existsSync, writeFileSync } = require("node:fs");
       setInterval(() => {
-        if (existsSync(${JSON.stringify(exitRequestPath)})) process.exit(0);
+        if (existsSync(${JSON.stringify(exitRequestPath)})) {
+          writeFileSync(${JSON.stringify(exitObservedPath)}, "");
+          process.exit(0);
+        }
       }, 25);
     `),
   });
@@ -788,6 +793,7 @@ it("never adopts a live worker's terminals after a kill cleanup it could not fin
     ...nodeTerminalCommand("setInterval(() => {}, 1000);"),
   });
   const pids = await recordedTerminalPids(paseoHome);
+  const endingPid = pids.get(ending.id)!;
   const remainingPid = pids.get(remaining.id)!;
 
   // A kill cleanup whose process table read fails signals nothing and leaves the worker live.
@@ -803,10 +809,21 @@ it("never adopts a live worker's terminals after a kill cleanup it could not fin
 
   // One terminal ends on its own: the live worker rewrites its record from memory.
   writeFileSync(exitRequestPath, "");
-  await waitForCondition(
-    async () => !(await recordedTerminalPids(paseoHome)).has(ending.id),
-    10000,
-  );
+  try {
+    await waitForCondition(
+      async () => !(await recordedTerminalPids(paseoHome)).has(ending.id),
+      10000,
+    );
+  } catch (error) {
+    const workerLog = readFileSync(terminalWorkerLogPath(paseoHome), "utf8");
+    console.error("CI terminal exit diagnostics", {
+      exitObserved: existsSync(exitObservedPath),
+      endingAlive: isProcessAlive(endingPid),
+      remainingAlive: isProcessAlive(remainingPid),
+      recordWriteErrors: workerLog.match(/CI terminal record write failed: \w+/g) ?? [],
+    });
+    throw error;
+  }
   expect((await readUnconfirmedTerminalCleanup(paseoHome)).length).toBeGreaterThan(0);
 
   manager = await startRealWorkerManager({ paseoHome });

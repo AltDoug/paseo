@@ -223,7 +223,12 @@ function runWorker(argv: string[]): void {
       ...record,
       terminals: record.terminals.filter((entry) => sessionsById.has(entry.id)),
     };
-    writeTerminalWorkerRecord(args.paseoHome, record);
+    try {
+      writeTerminalWorkerRecord(args.paseoHome, record);
+    } catch (error) {
+      console.error("CI terminal record write failed:", (error as NodeJS.ErrnoException).code);
+      throw error;
+    }
   }
 
   function removeOwnFiles(): void {
