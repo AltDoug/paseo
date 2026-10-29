@@ -571,3 +571,38 @@ test.each(["all", "base", "uncommitted"] as const)(
     expect(parsed.attachments).toEqual([attachment]);
   },
 );
+
+test("native agent creation accepts optional approval without weakening legacy strict acknowledgement", () => {
+  const toolPolicy = {
+    preapproved: [{ kind: "mcp", server: "hub", tool: "finish_execution" }],
+    enforcement: "if-supported",
+  };
+  const parsed = SessionInboundMessageSchema.parse({
+    type: "create_agent_request",
+    requestId: "req",
+    config: { provider: "pi", cwd: "/tmp", toolPolicy },
+  });
+  expect(parsed).toMatchObject({ config: { toolPolicy } });
+  expect(
+    SessionInboundMessageSchema.safeParse({
+      type: "hub.execution.agent.create.request",
+      requestId: "req",
+      executionId: "exec",
+      provider: "pi",
+      cwd: "/tmp",
+      prompt: "test",
+      toolPolicy: { preapproved: toolPolicy.preapproved },
+    }).success,
+  ).toBe(true);
+  expect(
+    SessionInboundMessageSchema.safeParse({
+      type: "hub.execution.agent.create.request",
+      requestId: "req",
+      executionId: "exec",
+      provider: "pi",
+      cwd: "/tmp",
+      prompt: "test",
+      toolPolicy,
+    }).success,
+  ).toBe(false);
+});

@@ -509,6 +509,8 @@ export interface McpToolRef {
 }
 
 export interface ToolPolicy {
+  /** Missing or required fails closed; if-supported requests approval convenience only. */
+  enforcement?: "required" | "if-supported";
   preapproved: McpToolRef[];
 }
 

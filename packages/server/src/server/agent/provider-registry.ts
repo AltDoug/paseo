@@ -652,12 +652,15 @@ function createRegistryEntry(
     supportsExactMcpPreapproval: resolved.contract.supportsExactMcpPreapproval,
     applyToolPolicy: (config, toolPolicy) => {
       if (toolPolicy && !resolved.contract.supportsExactMcpPreapproval) {
-        throw new ToolPolicyUnsupportedError(provider);
+        if (toolPolicy.enforcement !== "if-supported")
+          throw new ToolPolicyUnsupportedError(provider);
+        return { ...config, toolPolicy: undefined };
       }
+      const exactPolicy = toolPolicy ? { preapproved: toolPolicy.preapproved } : undefined;
       return {
         ...config,
-        toolPolicy: toolPolicy
-          ? (resolved.contract.applyToolPolicy?.(provider, toolPolicy) ?? toolPolicy)
+        toolPolicy: exactPolicy
+          ? (resolved.contract.applyToolPolicy?.(provider, exactPolicy) ?? exactPolicy)
           : undefined,
       };
     },

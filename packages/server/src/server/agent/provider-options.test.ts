@@ -135,6 +135,29 @@ describe("provider-owned option schemas", () => {
 });
 
 describe("exact MCP preapproval mappings", () => {
+  test("optional exact preapproval permits unsupported providers without changing their MCP config", () => {
+    const registry = buildProviderRegistry(createTestLogger());
+    const config = {
+      provider: "pi",
+      cwd: "/tmp",
+      mcpServers: { hub: { type: "http" as const, url: "http://localhost/hub" } },
+    };
+    expect(
+      registry.pi.applyToolPolicy(config, { ...hubPolicy, enforcement: "if-supported" }),
+    ).toEqual({ ...config, toolPolicy: undefined });
+  });
+  test.each(["claude", "codex", "opencode"])(
+    "optional grants retain exact approval for %s",
+    (provider) => {
+      const registry = buildProviderRegistry(createTestLogger());
+      const config = { provider, cwd: "/tmp" };
+      expect(
+        registry[provider]!.applyToolPolicy(config, { ...hubPolicy, enforcement: "if-supported" })
+          .toolPolicy,
+      ).toEqual(hubPolicy);
+    },
+  );
+
   test("unsupported providers fail closed with an unattended-execution error", () => {
     const registry = buildProviderRegistry(createTestLogger());
     expect(() =>

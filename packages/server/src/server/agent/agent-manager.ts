@@ -5458,6 +5458,9 @@ export class AgentManager {
     const definition = this.providerDefinitions.get(config.provider);
     this.validateToolPolicyServers(config);
     if (config.toolPolicy && !definition?.applyToolPolicy) {
+      if (config.toolPolicy.enforcement === "if-supported") {
+        return { ...config, toolPolicy: undefined };
+      }
       throw new Error(
         `Provider '${config.provider}' cannot preapprove exact MCP tools for unattended execution`,
       );

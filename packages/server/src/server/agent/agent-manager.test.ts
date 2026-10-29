@@ -3822,7 +3822,7 @@ test("resumeAgentFromPersistence drops stored internal paseo MCP when runtime in
   expect(snapshot.config.mcpServers).toBeUndefined();
 });
 
-test("createAgent preserves a user-provided paseo MCP config", async () => {
+test("createAgent preserves injected MCP when optional approval is unavailable", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -3851,6 +3851,10 @@ test("createAgent preserves a user-provided paseo MCP config", async () => {
     {
       provider: "codex",
       cwd: workdir,
+      toolPolicy: {
+        enforcement: "if-supported",
+        preapproved: [{ kind: "mcp", server: "paseo", tool: "finish_execution" }],
+      },
       mcpServers: {
         paseo: {
           type: "http",
@@ -3868,6 +3872,8 @@ test("createAgent preserves a user-provided paseo MCP config", async () => {
       url: "https://example.com/custom-paseo",
     },
   });
+  expect(snapshot.config.toolPolicy).toBeUndefined();
+  expect(client.lastConfig?.toolPolicy).toBeUndefined();
   expect(client.lastConfig?.mcpServers).toEqual(snapshot.config.mcpServers);
 });
 

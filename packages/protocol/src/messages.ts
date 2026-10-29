@@ -490,7 +490,9 @@ const AgentSessionConfigSchema = z.object({
   featureValues: z.record(z.string(), z.unknown()).optional(),
   title: z.string().trim().min(1).max(MAX_EXPLICIT_AGENT_TITLE_CHARS).optional().nullable(),
   providerOptions: ProviderOptionsSchema.optional(),
-  toolPolicy: ToolPolicySchema.optional(),
+  toolPolicy: ToolPolicySchema.extend({
+    enforcement: z.enum(["required", "if-supported"]).optional(),
+  }).optional(),
   systemPrompt: z.string().optional(),
   mcpServers: z.record(z.string(), McpServerConfigSchema).optional(),
 });
