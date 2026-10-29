@@ -607,6 +607,7 @@ export interface AgentSessionConfig {
   title?: string | null;
   providerOptions?: ProviderOptions;
   toolPolicy?: ToolPolicy;
+  mcpServerRequirements?: Record<string, "optional" | "required">;
   mcpServers?: Record<string, McpServerConfig>;
   /**
    * Internal agents are hidden from listings and don't trigger notifications.

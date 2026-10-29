@@ -3822,60 +3822,71 @@ test("resumeAgentFromPersistence drops stored internal paseo MCP when runtime in
   expect(snapshot.config.mcpServers).toBeUndefined();
 });
 
-test("createAgent preserves injected MCP when optional approval is unavailable", async () => {
-  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
-  const storagePath = join(workdir, "agents");
-  const storage = new AgentStorage(storagePath, logger);
+test.each([true, false])(
+  "createAgent permits optional approval with MCP capability %s",
+  async (supportsMcp) => {
+    const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+    const storagePath = join(workdir, "agents");
+    const storage = new AgentStorage(storagePath, logger);
 
-  class CaptureClient extends TestAgentClient {
-    lastConfig: AgentSessionConfig | null = null;
+    class CaptureClient extends TestAgentClient {
+      lastConfig: AgentSessionConfig | null = null;
 
-    override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
-      this.lastConfig = config;
-      return new McpCapableTestAgentSession(config);
+      override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+        this.lastConfig = config;
+        return supportsMcp ? new McpCapableTestAgentSession(config) : new TestAgentSession(config);
+      }
     }
-  }
 
-  const client = new CaptureClient();
-  const manager = new AgentManager({
-    clients: {
-      codex: client,
-    },
-    registry: storage,
-    logger,
-    mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
-    idFactory: () => "00000000-0000-4000-8000-000000000104",
-  });
-
-  const snapshot = await manager.createAgent(
-    {
-      provider: "codex",
-      cwd: workdir,
-      toolPolicy: {
-        enforcement: "if-supported",
-        preapproved: [{ kind: "mcp", server: "paseo", tool: "finish_execution" }],
+    const client = new CaptureClient();
+    const manager = new AgentManager({
+      clients: {
+        codex: client,
       },
-      mcpServers: {
-        paseo: {
-          type: "http",
-          url: "https://example.com/custom-paseo",
+      registry: storage,
+      logger,
+      mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
+      idFactory: () => "00000000-0000-4000-8000-000000000104",
+    });
+
+    const snapshot = await manager.createAgent(
+      {
+        provider: "codex",
+        mcpServerRequirements: { paseo: "optional" },
+        cwd: workdir,
+        toolPolicy: {
+          enforcement: "if-supported",
+          preapproved: [{ kind: "mcp", server: "paseo", tool: "finish_execution" }],
+        },
+        mcpServers: {
+          paseo: {
+            type: "http",
+            url: "https://example.com/custom-paseo",
+          },
         },
       },
-    },
-    undefined,
-    { workspaceId: undefined },
-  );
+      undefined,
+      { workspaceId: undefined },
+    );
 
-  expect(snapshot.config.mcpServers).toEqual({
-    paseo: {
-      type: "http",
-      url: "https://example.com/custom-paseo",
-    },
-  });
-  expect(snapshot.config.toolPolicy).toBeUndefined();
-  expect(client.lastConfig?.toolPolicy).toBeUndefined();
-  expect(client.lastConfig?.mcpServers).toEqual(snapshot.config.mcpServers);
-});
+    expect(snapshot.config.mcpServers).toEqual({
+      paseo: {
+        type: "http",
+        url: "https://example.com/custom-paseo",
+      },
+    });
+    expect((await storage.get(snapshot.id))?.config?.mcpServerRequirements).toEqual({
+      paseo: "optional",
+    });
+    await manager.reloadAgentSession(snapshot.id);
+    expect(manager.getAgent(snapshot.id)?.config.mcpServerRequirements).toEqual({
+      paseo: "optional",
+    });
+    expect(snapshot.config.toolPolicy).toBeUndefined();
+    expect(client.lastConfig?.toolPolicy).toBeUndefined();
+    expect(client.lastConfig?.mcpServers).toEqual(snapshot.config.mcpServers);
+  },
+);
 
 test("createAgent fails when cwd does not exist", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));

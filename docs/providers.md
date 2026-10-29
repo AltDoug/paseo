@@ -30,9 +30,16 @@ at session startup. See [provider configuration](custom-providers.md#provider-op
 for defaults and merge rules, and the [SDK guide](../public-docs/sdk/provider-options.md)
 for native keys and examples.
 
-Exact MCP preapproval is a separate daemon-owned contract. A new provider must fail
-closed for Hub unattended execution until it can approve one exact injected MCP
-server and tool identity without approving native tools.
+Exact MCP preapproval is a separate daemon-owned contract. A required tool policy
+(the default) fails closed unless the provider can approve exact injected server/tool
+identities without approving native tools. Native agent creation also accepts
+`toolPolicy.enforcement: "if-supported"` for automatic approval convenience:
+unsupported providers retain ordinary MCP configuration and native permissions.
+Hub uses that optional request; MCP support and exact approval are not provider
+eligibility requirements. Optional injection is declared separately with
+`mcpServerRequirements: { [serverName]: "optional" }`; other injected servers
+(including plugin-owned servers) keep their required semantics. The daemon
+advertises this native launch contract as `features.optionalMcpSupport`. The legacy Hub create API remains strict-only.
 
 ## Core adapter patterns
 

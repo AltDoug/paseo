@@ -27,6 +27,10 @@ const SERIALIZABLE_CONFIG_SCHEMA = z
       .nullable()
       .optional(),
     systemPrompt: z.string().nullable().optional(),
+    mcpServerRequirements: z
+      .record(z.string(), z.enum(["optional", "required"]))
+      .nullable()
+      .optional(),
     mcpServers: z.record(z.string(), z.any()).nullable().optional(),
   })
   .nullable()
@@ -89,6 +93,7 @@ export type SerializableAgentConfig = Pick<
   | "toolPolicy"
   | "systemPrompt"
   | "mcpServers"
+  | "mcpServerRequirements"
 >;
 
 export type StoredAgentRecord = z.infer<typeof STORED_AGENT_SCHEMA>;

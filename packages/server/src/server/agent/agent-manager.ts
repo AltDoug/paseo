@@ -216,6 +216,8 @@ function buildStoredAgentConfig(record: StoredAgentRecord): AgentSessionConfig {
   if (record.config.providerOptions != null) {
     config.providerOptions = record.config.providerOptions;
   }
+  if (record.config.mcpServerRequirements != null)
+    config.mcpServerRequirements = record.config.mcpServerRequirements;
   if (record.config.toolPolicy != null) config.toolPolicy = record.config.toolPolicy;
   if (record.config.systemPrompt != null) {
     config.systemPrompt = record.config.systemPrompt;
@@ -1686,7 +1688,7 @@ export class AgentManager {
     );
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     if (
-      Object.keys(stripInternalPaseoMcpServer(providerLaunchConfig).mcpServers ?? {}).length > 0 &&
+      this.hasRequiredExternalMcpServers(providerLaunchConfig) &&
       existing.session.capabilities.supportsMcpServers !== true
     ) {
       throw this.unsupportedMcpError(providerLaunchConfig, launchContext);
@@ -3888,13 +3890,19 @@ export class AgentManager {
     }
   }
 
+  private hasRequiredExternalMcpServers(config: AgentSessionConfig): boolean {
+    return Object.keys(stripInternalPaseoMcpServer(config).mcpServers ?? {}).some(
+      (name) => config.mcpServerRequirements?.[name] !== "optional",
+    );
+  }
+
   private async requireExternalMcpSupport(
     session: AgentSession,
     launchConfig: AgentSessionConfig,
     launchContext: AgentLaunchContext,
   ): Promise<void> {
     if (
-      Object.keys(stripInternalPaseoMcpServer(launchConfig).mcpServers ?? {}).length === 0 ||
+      !this.hasRequiredExternalMcpServers(launchConfig) ||
       session.capabilities.supportsMcpServers === true
     ) {
       return;

@@ -494,6 +494,7 @@ const AgentSessionConfigSchema = z.object({
     enforcement: z.enum(["required", "if-supported"]).optional(),
   }).optional(),
   systemPrompt: z.string().optional(),
+  mcpServerRequirements: z.record(z.string(), z.enum(["optional", "required"])).optional(),
   mcpServers: z.record(z.string(), McpServerConfigSchema).optional(),
 });
 
@@ -3673,6 +3674,7 @@ export const ServerInfoStatusPayloadSchema = z
         internalWorkspaces: z.boolean().optional(),
         backgroundWorkspaces: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
+        optionalMcpSupport: z.boolean().optional(),
         connectedHosts: z.boolean().optional(),
         hostMultiplexing: z.boolean().optional(),
         usageSources: z.boolean().optional(),

@@ -515,6 +515,8 @@ export interface ToolPolicy {
 }
 
 export interface AgentSessionConfig {
+  /** Per-server launch requirement; unspecified servers are required. */
+  mcpServerRequirements?: Record<string, "optional" | "required">;
   provider: AgentProvider;
   cwd: string;
   /**
