@@ -223,6 +223,7 @@ function runWorker(argv: string[]): void {
       ...record,
       terminals: record.terminals.filter((entry) => sessionsById.has(entry.id)),
     };
+    console.error("CI terminal record write attempted");
     try {
       writeTerminalWorkerRecord(args.paseoHome, record);
     } catch (error) {

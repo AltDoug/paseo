@@ -2,7 +2,9 @@ import { afterEach, expect, it } from "vitest";
 import { isPlatform } from "../test-utils/platform.js";
 import { EventEmitter } from "node:events";
 import {
+  closeSync,
   existsSync,
+  openSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -44,6 +46,7 @@ import {
   readTerminalWorkerRecord,
   terminalWorkerDirectory,
   terminalWorkerLogPath,
+  terminalWorkerRecordPath,
   type TerminalWorkerRecord,
 } from "./terminal-worker-record.js";
 import { TERMINAL_WORKER_PROTOCOL_OVERRIDE_ENV } from "./terminal-worker-protocol.js";
@@ -766,9 +769,9 @@ async function recordedTerminalPids(paseoHome: string): Promise<Map<string, numb
   return pids;
 }
 
-it.each(Array.from({ length: process.platform === "win32" ? 20 : 1 }, (_, index) => index))(
-  "never adopts a live worker's terminals after a kill cleanup it could not finish, even once the worker rewrites its record (diagnostic %i)",
-  async () => {
+it.each([false, true])(
+  "never adopts a live worker's terminals after a kill cleanup it could not finish, even once the worker rewrites its record (held reader: %s)",
+  async (holdReader) => {
     const paseoHome = createTemporaryHome();
     const cwd = mkdtempSync(join(tmpdir(), "worker-terminal-manager-unfinished-kill-"));
     temporaryDirs.push(cwd);
@@ -797,6 +800,7 @@ it.each(Array.from({ length: process.platform === "win32" ? 20 : 1 }, (_, index)
     const pids = await recordedTerminalPids(paseoHome);
     const endingPid = pids.get(ending.id)!;
     const remainingPid = pids.get(remaining.id)!;
+    const [record] = await workerRecords(paseoHome);
 
     // A kill cleanup whose process table read fails signals nothing and leaves the worker live.
     const inspector = createTerminalWorkerProcessInspector();
@@ -809,9 +813,16 @@ it.each(Array.from({ length: process.platform === "win32" ? 20 : 1 }, (_, index)
     await first.detach();
     expect((await readUnconfirmedTerminalCleanup(paseoHome)).length).toBeGreaterThan(0);
 
-    // One terminal ends on its own: the live worker rewrites its record from memory.
-    writeFileSync(exitRequestPath, "");
+    // Diagnostic: keep the same read handle the poller uses open across the exit write.
+    const recordFd = holdReader
+      ? openSync(terminalWorkerRecordPath(paseoHome, record!.pid), "r")
+      : null;
+    const attemptsBeforeExit =
+      readFileSync(terminalWorkerLogPath(paseoHome), "utf8").match(
+        /CI terminal record write attempted/g,
+      )?.length ?? 0;
     try {
+      writeFileSync(exitRequestPath, "");
       await waitForCondition(
         async () => !(await recordedTerminalPids(paseoHome)).has(ending.id),
         10000,
@@ -819,12 +830,19 @@ it.each(Array.from({ length: process.platform === "win32" ? 20 : 1 }, (_, index)
     } catch (error) {
       const workerLog = readFileSync(terminalWorkerLogPath(paseoHome), "utf8");
       console.error("CI terminal exit diagnostics", {
+        holdReader,
+        attemptsAfterExit:
+          (workerLog.match(/CI terminal record write attempted/g)?.length ?? 0) -
+          attemptsBeforeExit,
+        uncaughtExceptionLogged: workerLog.includes("Terminal worker uncaught exception"),
         exitObserved: existsSync(exitObservedPath),
         endingAlive: isProcessAlive(endingPid),
         remainingAlive: isProcessAlive(remainingPid),
         recordWriteErrors: workerLog.match(/CI terminal record write failed: \w+/g) ?? [],
       });
       throw error;
+    } finally {
+      if (recordFd !== null) closeSync(recordFd);
     }
     expect((await readUnconfirmedTerminalCleanup(paseoHome)).length).toBeGreaterThan(0);
 
