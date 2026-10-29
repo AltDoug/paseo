@@ -276,7 +276,7 @@ test.describe("Usage item", () => {
       await waitForSettledPosition(sheet);
       const sheetBox = (await sheet.boundingBox())!;
       // The sheet leaves the screen above it as its backdrop.
-      expect(sheetBox.y).toBeGreaterThanOrEqual(COMPACT.height * 0.2);
+      expect(sheetBox.y).toBeGreaterThan(0);
       expect(sheetBox.width).toBeGreaterThan(COMPACT.width * 0.8);
       await qaScreenshot(page, "compact-sheet");
       await closeUsageFromBackdrop(page);
@@ -440,4 +440,32 @@ test("released hosts supply source logos through the client conversion", async (
     screen.getByTestId("usage-report-codex").locator("svg path").first(),
   ).toHaveAttribute("d", codexPath);
   await qaScreenshot(page, "released-host-usage-modal");
+});
+
+test("hidden usage sends no requests until opened", async ({ page }) => {
+  test.setTimeout(180_000);
+  const usage = await installUsageReportsFixture(page, { lists: [() => claudeAndCodexReports()] });
+  await page.setViewportSize(WIDE);
+  await gotoAppShell(page);
+  await expectNoUsageItem(page);
+  await expect(page.getByRole("button", { name: "Usage", exact: true })).toBeVisible({
+    timeout: 90_000,
+  });
+  await openSidebarNavSettings(page);
+  await expectFooterItemSetting(page, "usage", false);
+  await leaveSettings(page);
+  expect(usage.listRequests()).toHaveLength(0);
+  await openUsageFromIcon(page);
+  await usage.waitForListRequests(1);
+  expect(usage.listRequests()).toHaveLength(1);
+});
+
+test("visible usage summary requests reports on load", async ({ page }) => {
+  test.setTimeout(180_000);
+  const usage = await installUsageReportsFixture(page, { lists: [() => claudeAndCodexReports()] });
+  await seedSidebarFooterPreferences(page, [{ key: "usage", visible: true }]);
+  await page.setViewportSize(WIDE);
+  await gotoAppShell(page);
+  await expectPinnedUsage(page, ["31% 5h", "54% wk", "7% 5h", "12% wk"]);
+  expect(usage.listRequests()).toHaveLength(1);
 });

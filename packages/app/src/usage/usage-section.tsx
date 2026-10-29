@@ -1,3 +1,4 @@
+import { useUsageSetting } from "./setting";
 import { useTranslation } from "react-i18next";
 import { useMemo } from "react";
 import { Text, View } from "react-native";
@@ -27,8 +28,8 @@ export function UsageSection({
   testID?: string;
 }) {
   const trailing = useMemo(
-    () => <UsageControls view={view} onRefresh={onRefresh} />,
-    [onRefresh, view],
+    () => <UsageControls serverId={serverId} view={view} onRefresh={onRefresh} />,
+    [onRefresh, view, serverId],
   );
 
   return (
@@ -51,6 +52,15 @@ export function UsageBody({
   onRefresh: () => void;
 }) {
   const { t } = useTranslation();
+  const setting = useUsageSetting(serverId);
+  if (view.kind === "off")
+    return (
+      <View>
+        <UsageMessage text={view.message} />
+        {setting.error ? <Alert variant="error" description={setting.error.message} /> : null}
+        <Button onPress={setting.turnOn}>{t("providerUsage.turnOn")}</Button>
+      </View>
+    );
   if (view.kind === "unavailable") {
     return <UsageMessage text={view.message} />;
   }

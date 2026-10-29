@@ -1,3 +1,4 @@
+import { useUsageInSidebar } from "./in-sidebar";
 import {
   createContext,
   Fragment,
@@ -17,7 +18,7 @@ import {
 } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { builtinSidebarNavLabelKey } from "@/sidebar-nav/model";
-import { useUsagePreferences } from "./display";
+import { useUsageDisplay } from "./display";
 import { useUsageHostId } from "./hosts";
 import { useUsageHostReports } from "./queries";
 import { UsageSourceIcon } from "./source-icon";
@@ -33,10 +34,12 @@ import {
 import { UsageModal } from "./usage-modal";
 
 /** Each summary window with data on the usage host, under its source; empty while none has. */
-function useUsageSummary(): readonly PinnedUsageSource[] {
+function useUsageSummary(fetch = true): readonly PinnedUsageSource[] {
   const { t } = useTranslation();
-  const { preferences } = useUsagePreferences();
-  const reports = useUsageHostReports(useUsageHostId());
+  const { inSidebar } = useUsageInSidebar();
+  const serverId = useUsageHostId();
+  const reports = useUsageHostReports(inSidebar ? serverId : null, fetch);
+  const { preferences } = useUsageDisplay(reports);
   return useMemo(() => resolvePinnedUsage(reports, preferences, t), [preferences, reports, t]);
 }
 
@@ -54,7 +57,8 @@ export function UsageSidebarItem() {
   const { t } = useTranslation();
   const label = t(builtinSidebarNavLabelKey("usage"));
   const openUsage = useOpenSidebarUsage();
-  const sources = useUsageSummary();
+  // The footer owns fetching; this row reads the same cached summary.
+  const sources = useUsageSummary(false);
   if (sources.length === 0) return null;
   return <PinnedUsageTrigger label={label} sources={sources} onPress={openUsage} />;
 }
