@@ -45,7 +45,6 @@ import {
   listTerminalWorkerRecords,
   readTerminalWorkerRecord,
   terminalWorkerDirectory,
-  terminalWorkerLogPath,
   terminalWorkerRecordPath,
   type TerminalWorkerRecord,
 } from "./terminal-worker-record.js";
@@ -807,45 +806,35 @@ it.each([false, true])(
     await expect(
       reapTerminalWorkers({
         paseoHome,
-        inspector: { ...inspector, listProcesses: () => Promise.reject(new Error("ps timed out")) },
+        inspector: {
+          ...inspector,
+          listProcesses: () => Promise.reject(new Error("ps timed out")),
+        },
       }),
     ).rejects.toBeInstanceOf(TerminalCleanupNotConfirmedError);
-    await first.detach();
     expect((await readUnconfirmedTerminalCleanup(paseoHome)).length).toBeGreaterThan(0);
 
-    // Diagnostic: keep the same read handle the poller uses open across the exit write.
+    // Keep an ordinary reader open until the worker delivers the terminal exit.
+    // Windows cannot replace the record while this handle is open. The exit must
+    // still reach the controller, and publication must recover after release.
     const recordFd = holdReader
       ? openSync(terminalWorkerRecordPath(paseoHome, record!.pid), "r")
       : null;
-    const attemptsBeforeExit =
-      readFileSync(terminalWorkerLogPath(paseoHome), "utf8").match(
-        /CI terminal record write attempted/g,
-      )?.length ?? 0;
     try {
       writeFileSync(exitRequestPath, "");
-      await waitForCondition(
-        async () => !(await recordedTerminalPids(paseoHome)).has(ending.id),
-        10000,
-      );
-    } catch (error) {
-      const workerLog = readFileSync(terminalWorkerLogPath(paseoHome), "utf8");
-      console.error("CI terminal exit diagnostics", {
-        holdReader,
-        attemptsAfterExit:
-          (workerLog.match(/CI terminal record write attempted/g)?.length ?? 0) -
-          attemptsBeforeExit,
-        uncaughtExceptionLogged: workerLog.includes("Terminal worker uncaught exception"),
-        exitObserved: existsSync(exitObservedPath),
-        endingAlive: isProcessAlive(endingPid),
-        remainingAlive: isProcessAlive(remainingPid),
-        recordWriteErrors: workerLog.match(/CI terminal record write failed: \w+/g) ?? [],
-      });
-      throw error;
+      await waitForCondition(() => first.getTerminal(ending.id) === undefined, 10000);
+      expect(existsSync(exitObservedPath)).toBe(true);
+      expect(isProcessAlive(endingPid)).toBe(false);
     } finally {
       if (recordFd !== null) closeSync(recordFd);
     }
+    await waitForCondition(
+      async () => !(await recordedTerminalPids(paseoHome)).has(ending.id),
+      10000,
+    );
     expect((await readUnconfirmedTerminalCleanup(paseoHome)).length).toBeGreaterThan(0);
 
+    await first.detach();
     manager = await startRealWorkerManager({ paseoHome });
 
     expect(manager.getTerminal(remaining.id)).toBeUndefined();
