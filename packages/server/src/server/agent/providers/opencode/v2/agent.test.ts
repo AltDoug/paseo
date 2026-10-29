@@ -6,6 +6,47 @@ import type { AgentStreamEvent } from "../../../agent-sdk-types.js";
 import { OpenCodeV2AgentClient } from "./agent.js";
 import { V2Harness } from "../test-utils/v2-harness.js";
 import type { V2Api } from "./api.js";
+import { UsageSourceRegistry } from "../../../../plugins/usage-sources/index.js";
+
+test("#7116: v2 agent usage includes the plan windows available on the host", async () => {
+  const harness = new V2Harness();
+  const client = new OpenCodeV2AgentClient({
+    logger: createTestLogger(),
+    runtime: harness.runtime,
+  });
+  const session = await client.createSession({
+    provider: "opencode",
+    cwd: "/tmp/project",
+    model: "openai/test-model",
+  });
+  const registry = new UsageSourceRegistry(Date.now, 300_000, undefined, {
+    hasAgent: (id) => id === session.id,
+    usageSession: (id) => (id === session.id ? (session.usageSession?.() ?? null) : null),
+  });
+  const report = {
+    status: "available",
+    windows: [{ id: "weekly", label: "Weekly", usedPct: 31 }],
+  };
+  registry.register({
+    id: "test-plan",
+    label: "Test plan",
+    discover: async (scope) =>
+      scope.kind === "global" ||
+      (scope.provider === "opencode" && scope.model === "openai/test-model")
+        ? [{ key: "account", input: {} }]
+        : [],
+    fetch: async () => report,
+  });
+  try {
+    const host = await registry.listReports();
+    expect(host.map((entry) => entry.report)).toEqual([report]);
+    const agent = await registry.listReports({ agentId: session.id });
+    expect(agent.map((entry) => entry.report)).toEqual([report]);
+  } finally {
+    await session.close();
+    await client.shutdown();
+  }
+});
 
 function terminalEvents(events: AgentStreamEvent[]) {
   return events.filter(
