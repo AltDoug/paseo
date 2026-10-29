@@ -771,10 +771,16 @@ it("never adopts a live worker's terminals after a kill cleanup it could not fin
   temporaryDirs.push(cwd);
   const first = await startRealWorkerManager({ paseoHome });
   manager = first;
+  const exitRequestPath = join(cwd, "exit-requested");
   const ending = await first.createTerminal({
     workspaceId: "ws-unfinished-kill",
     cwd,
-    ...nodeTerminalCommand("setInterval(() => {}, 1000);"),
+    ...nodeTerminalCommand(`
+      const { existsSync } = require("node:fs");
+      setInterval(() => {
+        if (existsSync(${JSON.stringify(exitRequestPath)})) process.exit(0);
+      }, 25);
+    `),
   });
   const remaining = await first.createTerminal({
     workspaceId: "ws-unfinished-kill",
@@ -782,7 +788,6 @@ it("never adopts a live worker's terminals after a kill cleanup it could not fin
     ...nodeTerminalCommand("setInterval(() => {}, 1000);"),
   });
   const pids = await recordedTerminalPids(paseoHome);
-  const endingPid = pids.get(ending.id)!;
   const remainingPid = pids.get(remaining.id)!;
 
   // A kill cleanup whose process table read fails signals nothing and leaves the worker live.
@@ -797,7 +802,7 @@ it("never adopts a live worker's terminals after a kill cleanup it could not fin
   expect((await readUnconfirmedTerminalCleanup(paseoHome)).length).toBeGreaterThan(0);
 
   // One terminal ends on its own: the live worker rewrites its record from memory.
-  process.kill(endingPid, "SIGKILL");
+  writeFileSync(exitRequestPath, "");
   await waitForCondition(
     async () => !(await recordedTerminalPids(paseoHome)).has(ending.id),
     10000,
