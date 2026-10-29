@@ -19,6 +19,7 @@ import {
   type AgentManagerEvent,
   type ManagedAgent,
 } from "./agent-manager.js";
+import { buildProviderRegistry } from "./provider-registry.js";
 import { AgentStorage } from "./agent-storage.js";
 import { InMemoryAgentTimelineStore } from "./agent-timeline-store.js";
 import { toAgentPayload } from "./agent-projections.js";
@@ -445,7 +446,7 @@ class EnvProbeAgentClient extends TestAgentClient {
 }
 
 class TestAgentSession implements AgentSession {
-  readonly provider = "codex" as const;
+  readonly provider: AgentProvider;
   readonly capabilities = TEST_CAPABILITIES;
   readonly id = randomUUID();
   private runtimeModel: string | null = null;
@@ -453,7 +454,9 @@ class TestAgentSession implements AgentSession {
   private turnIdCounter = 0;
   private interrupted = false;
 
-  constructor(private readonly config: AgentSessionConfig) {}
+  constructor(private readonly config: AgentSessionConfig) {
+    this.provider = config.provider;
+  }
 
   async run(): Promise<AgentRunResult> {
     return {
@@ -3822,9 +3825,13 @@ test("resumeAgentFromPersistence drops stored internal paseo MCP when runtime in
   expect(snapshot.config.mcpServers).toBeUndefined();
 });
 
-test.each([true, false])(
-  "createAgent permits optional approval with MCP capability %s",
-  async (supportsMcp) => {
+test.each([
+  { provider: "pi", supportsMcp: true },
+  { provider: "pi", supportsMcp: false },
+  { provider: "codex", supportsMcp: false },
+])(
+  "createAgent permits optional approval for $provider with MCP capability $supportsMcp",
+  async ({ provider, supportsMcp }) => {
     const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
     const storagePath = join(workdir, "agents");
     const storage = new AgentStorage(storagePath, logger);
@@ -3838,11 +3845,20 @@ test.each([true, false])(
       }
     }
 
-    const client = new CaptureClient();
+    const client = new CaptureClient(provider);
     const manager = new AgentManager({
       clients: {
-        codex: client,
+        [provider]: client,
       },
+      providerDefinitions:
+        provider === "pi"
+          ? {
+              pi: {
+                enabled: true,
+                applyToolPolicy: buildProviderRegistry(logger).pi.applyToolPolicy,
+              },
+            }
+          : undefined,
       registry: storage,
       logger,
       mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
@@ -3851,7 +3867,7 @@ test.each([true, false])(
 
     const snapshot = await manager.createAgent(
       {
-        provider: "codex",
+        provider,
         mcpServerRequirements: { paseo: "optional" },
         cwd: workdir,
         toolPolicy: {

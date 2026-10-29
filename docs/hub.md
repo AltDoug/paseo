@@ -44,6 +44,15 @@ fall back to creating a fresh agent when continuation was requested.
 Hub owns conversation keys, trigger policy, execution records, and the mapping to workspace/agent
 IDs. None of these routing concepts are part of the generic daemon RPCs. Creation accepts ordinary
 provider configuration, exact MCP tool policy, environment, and workspace/worktree selection.
+
+`server_info.features.optionalMcpSupport` advertises optional MCP launch requirements.
+Hub sends `toolPolicy.enforcement: "if-supported"` and
+`mcpServerRequirements: { hub: "optional" }` only when this flag is true.
+Without it, Hub preserves its existing strict tool-policy request. Available
+providers remain selectable; providers lacking strict approval support need an
+updated daemon to launch from Hub. Required external/plugin servers and explicitly
+required tool policies keep their existing refusal semantics.
+
 Private session configuration is persisted for recovery and is not exposed in agent snapshots.
 Provider controls remain provider-native; see [providers.md](providers.md).
 
