@@ -51,8 +51,19 @@ export class UsageSession {
   async handleLegacyList(
     msg: Extract<SessionInboundMessage, { type: "provider.usage.list.request" }>,
   ): Promise<void> {
+    if (!this.options.isEnabled()) {
+      this.options.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: "Usage is off on this host.",
+          code: "provider_usage_list_failed",
+        },
+      });
+      return;
+    }
     try {
-      if (!this.options.isEnabled()) throw new Error("Usage is off on this host.");
       if (!this.options.runtime) throw new Error("Plugin runtime is unavailable");
       const usage = await this.options.runtime.listLegacyUsage();
       this.options.emit({
@@ -71,10 +82,7 @@ export class UsageSession {
         payload: {
           requestId: msg.requestId,
           requestType: msg.type,
-          error:
-            err.message === "Usage is off on this host."
-              ? err.message
-              : `Failed to list provider usage: ${err.message}`,
+          error: `Failed to list provider usage: ${err.message}`,
           code: "provider_usage_list_failed",
         },
       });

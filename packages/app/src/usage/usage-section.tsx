@@ -1,4 +1,3 @@
-import { useUsageSetting } from "./setting";
 import { useTranslation } from "react-i18next";
 import { useMemo } from "react";
 import { Text, View } from "react-native";
@@ -8,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import type { UsageDisplay } from "./display";
+import { useUsageSetting } from "./setting";
 import { UsageControls } from "./controls";
 import { UsageList } from "./list";
 import type { UsageView } from "./types";

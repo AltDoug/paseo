@@ -1,4 +1,3 @@
-import { useUsageInSidebar } from "./in-sidebar";
 import {
   createContext,
   Fragment,
@@ -19,6 +18,7 @@ import {
 import { StyleSheet } from "react-native-unistyles";
 import { builtinSidebarNavLabelKey } from "@/sidebar-nav/model";
 import { useUsageDisplay } from "./display";
+import { useUsageInSidebar } from "./in-sidebar";
 import { useUsageHostId } from "./hosts";
 import { useUsageHostReports } from "./queries";
 import { UsageSourceIcon } from "./source-icon";
@@ -34,11 +34,11 @@ import {
 import { UsageModal } from "./usage-modal";
 
 /** Each summary window with data on the usage host, under its source; empty while none has. */
-function useUsageSummary(fetch = true): readonly PinnedUsageSource[] {
+function useUsageSummary(requestReports = true): readonly PinnedUsageSource[] {
   const { t } = useTranslation();
   const { inSidebar } = useUsageInSidebar();
   const serverId = useUsageHostId();
-  const reports = useUsageHostReports(inSidebar ? serverId : null, fetch);
+  const reports = useUsageHostReports(inSidebar ? serverId : null, requestReports);
   const { preferences } = useUsageDisplay(reports);
   return useMemo(() => resolvePinnedUsage(reports, preferences, t), [preferences, reports, t]);
 }
@@ -57,7 +57,8 @@ export function UsageSidebarItem() {
   const { t } = useTranslation();
   const label = t(builtinSidebarNavLabelKey("usage"));
   const openUsage = useOpenSidebarUsage();
-  // The footer owns fetching; this row reads the same cached summary.
+  // The row mounts after reports arrive; observing without requesting avoids
+  // the fetch-query policy’s unconditional refetch on mount.
   const sources = useUsageSummary(false);
   if (sources.length === 0) return null;
   return <PinnedUsageTrigger label={label} sources={sources} onPress={openUsage} />;

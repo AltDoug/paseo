@@ -1,6 +1,3 @@
-import { Alert } from "@/components/ui/alert";
-import { useUsageSetting } from "./setting";
-import { useHosts } from "@/runtime/host-runtime";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 import { Settings } from "lucide-react-native";
@@ -11,7 +8,10 @@ import { ToolbarButton, paneContentToolbarIconSize } from "@/components/ui/pane-
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { SettingsRow, SettingsSwitch } from "@/components/settings";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
+import { Alert } from "@/components/ui/alert";
+import { useHosts } from "@/runtime/host-runtime";
 import { settingsStyles } from "@/styles/settings";
+import { useUsageSetting } from "./setting";
 import { useUsageDisplay } from "./display";
 import { useUsageInSidebar } from "./in-sidebar";
 import type { UsageDisplayAs } from "./preferences";
@@ -56,15 +56,13 @@ export function UsageOptions({ serverId }: { serverId: string | null }) {
         <View testID="usage-options-fields">
           {setting.error ? <Alert variant="error" description={setting.error.message} /> : null}
           {setting.supported ? (
-            <View>
-              <SettingsSwitch
-                label={t("providerUsage.checkUsage")}
-                hint={t("providerUsage.checkUsageHint", { host: hostLabel })}
-                disabled={!setting.ready}
-                value={setting.enabled}
-                onValueChange={setting.setEnabled}
-              />
-            </View>
+            <SettingsSwitch
+              label={t("providerUsage.checkUsage")}
+              hint={t("providerUsage.checkUsageHint", { host: hostLabel })}
+              disabled={!setting.ready}
+              value={setting.enabled}
+              onValueChange={setting.setEnabled}
+            />
           ) : null}
           <View style={setting.supported ? settingsStyles.rowBorder : undefined}>
             <SettingsSwitch

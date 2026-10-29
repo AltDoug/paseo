@@ -1,4 +1,3 @@
-import { useUsageSetting } from "./setting";
 import { useTranslation } from "react-i18next";
 import { supportsUsageReports } from "@getpaseo/client/internal/daemon-client";
 import { useCallback, useMemo } from "react";
@@ -18,6 +17,7 @@ import {
   useHosts,
 } from "@/runtime/host-runtime";
 import { useSessionStore, type SessionState } from "@/stores/session-store";
+import { useUsageSetting } from "./setting";
 import { usageCopy } from "./copy";
 import {
   replaceReport,
@@ -168,11 +168,14 @@ const NO_REPORTS: UsageReportEntry[] = [];
  * The reports of the sidebar's usage host, which is connected and reports usage; none until they
  * load, or without a host.
  */
-export function useUsageHostReports(serverId: string | null, fetch = true): UsageReportEntry[] {
+export function useUsageHostReports(
+  serverId: string | null,
+  requestReports = true,
+): UsageReportEntry[] {
   const setting = useUsageSetting(serverId);
   const queryClient = useQueryClient();
   const query = useFetchQuery({
-    enabled: setting.enabled && fetch,
+    enabled: setting.enabled && requestReports,
     queryKey: usageReportsQueryKey(serverId ?? ""),
     queryFn: serverId ? () => listReports(queryClient, serverId) : skipToken,
     dataShape: "list",

@@ -18,7 +18,7 @@ export function useUsageSetting(serverId: string | null) {
     supported,
     error: mutation.error,
     // COMPAT(usageSetting): added in v0.14, remove after 2027-05-01.
-    enabled: !supported || config?.usage?.enabled === true,
+    enabled: !supported || (config !== null && config.usage?.enabled !== false),
     ready: !supported || config !== null,
     setEnabled,
     turnOn,

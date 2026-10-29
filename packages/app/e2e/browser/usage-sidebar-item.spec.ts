@@ -276,7 +276,7 @@ test.describe("Usage item", () => {
       await waitForSettledPosition(sheet);
       const sheetBox = (await sheet.boundingBox())!;
       // The sheet leaves the screen above it as its backdrop.
-      expect(sheetBox.y).toBeGreaterThan(0);
+      expect(sheetBox.y).toBeGreaterThanOrEqual(COMPACT.height * 0.2);
       expect(sheetBox.width).toBeGreaterThan(COMPACT.width * 0.8);
       await qaScreenshot(page, "compact-sheet");
       await closeUsageFromBackdrop(page);
