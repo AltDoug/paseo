@@ -18,6 +18,11 @@ export function stripInternalPaseoMcpServer(config: AgentSessionConfig): AgentSe
   delete nextMcpServers[PASEO_MCP_SERVER_NAME];
 
   const next = { ...config };
+  if (next.mcpServerRequirements?.[PASEO_MCP_SERVER_NAME]) {
+    next.mcpServerRequirements = { ...next.mcpServerRequirements };
+    delete next.mcpServerRequirements[PASEO_MCP_SERVER_NAME];
+    if (Object.keys(next.mcpServerRequirements).length === 0) delete next.mcpServerRequirements;
+  }
   if (Object.keys(nextMcpServers).length > 0) {
     next.mcpServers = nextMcpServers;
   } else {

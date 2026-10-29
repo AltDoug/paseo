@@ -3850,15 +3850,12 @@ test.each([
       clients: {
         [provider]: client,
       },
-      providerDefinitions:
-        provider === "pi"
-          ? {
-              pi: {
-                enabled: true,
-                applyToolPolicy: buildProviderRegistry(logger).pi.applyToolPolicy,
-              },
-            }
-          : undefined,
+      providerDefinitions: {
+        [provider]: {
+          enabled: true,
+          applyToolPolicy: buildProviderRegistry(logger)[provider]!.applyToolPolicy,
+        },
+      },
       registry: storage,
       logger,
       mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
@@ -3898,8 +3895,12 @@ test.each([
     expect(manager.getAgent(snapshot.id)?.config.mcpServerRequirements).toEqual({
       paseo: "optional",
     });
-    expect(snapshot.config.toolPolicy).toBeUndefined();
-    expect(client.lastConfig?.toolPolicy).toBeUndefined();
+    const expectedPolicy =
+      provider === "codex"
+        ? { preapproved: [{ kind: "mcp", server: "paseo", tool: "finish_execution" }] }
+        : undefined;
+    expect(snapshot.config.toolPolicy).toEqual(expectedPolicy);
+    expect(client.lastConfig?.toolPolicy).toEqual(expectedPolicy);
     expect(client.lastConfig?.mcpServers).toEqual(snapshot.config.mcpServers);
   },
 );
@@ -12607,4 +12608,22 @@ test("an out-of-band command racing idle cleanup waits for the resumed runtime",
   expect(await command).toEqual({ disposition: "out_of_band" });
   expect(h.commands).toEqual(["/maintenance"]);
   expect(h.prompts).toEqual([]);
+});
+
+test("MCP requirements cannot mark a later plugin server optional", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: new AgentStorage(join(workdir, "agents"), logger),
+    logger,
+  });
+  await expect(
+    manager.createAgent(
+      { provider: "codex", cwd: workdir, mcpServerRequirements: { plugin: "optional" } },
+      undefined,
+      { workspaceId: undefined },
+    ),
+  ).rejects.toThrow(
+    "MCP server requirement 'plugin' requires MCP server 'plugin' in the same agent request",
+  );
 });

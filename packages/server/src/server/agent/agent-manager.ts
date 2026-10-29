@@ -5465,10 +5465,8 @@ export class AgentManager {
   private applyProviderConfiguration(config: AgentSessionConfig): AgentSessionConfig {
     const definition = this.providerDefinitions.get(config.provider);
     this.validateToolPolicyServers(config);
+    this.validateMcpServerRequirements(config);
     if (config.toolPolicy && !definition?.applyToolPolicy) {
-      if (config.toolPolicy.enforcement === "if-supported") {
-        return { ...config, toolPolicy: undefined };
-      }
       throw new Error(
         `Provider '${config.provider}' cannot preapprove exact MCP tools for unattended execution`,
       );
@@ -5476,6 +5474,16 @@ export class AgentManager {
     return definition?.applyToolPolicy
       ? definition.applyToolPolicy(config, config.toolPolicy)
       : config;
+  }
+
+  private validateMcpServerRequirements(config: AgentSessionConfig): void {
+    for (const name of Object.keys(config.mcpServerRequirements ?? {})) {
+      if (!Object.hasOwn(config.mcpServers ?? {}, name)) {
+        throw new Error(
+          `MCP server requirement '${name}' requires MCP server '${name}' in the same agent request`,
+        );
+      }
+    }
   }
 
   private validateToolPolicyServers(config: AgentSessionConfig): void {

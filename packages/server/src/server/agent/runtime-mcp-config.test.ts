@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import type { AgentSessionConfig } from "./agent-sdk-types.js";
-import { withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
+import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
 
 const BASE_CONFIG: AgentSessionConfig = {
   provider: "claude",
@@ -48,4 +48,16 @@ describe("withRuntimePaseoMcpServer", () => {
 
     expect(result.mcpServers).toBeUndefined();
   });
+});
+
+test("stripping an internal MCP server also strips its launch requirement", () => {
+  const result = stripInternalPaseoMcpServer({
+    ...BASE_CONFIG,
+    mcpServerRequirements: { paseo: "optional", hub: "optional" },
+    mcpServers: {
+      paseo: { type: "http", url: "http://127.0.0.1/mcp/agents?callerAgentId=agent-1" },
+      hub: { type: "http", url: "https://hub.test/mcp" },
+    },
+  });
+  expect(result.mcpServerRequirements).toEqual({ hub: "optional" });
 });
