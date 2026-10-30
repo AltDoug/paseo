@@ -2,21 +2,36 @@ import { useEffect } from "react";
 import { listenToDesktopEvent } from "@/desktop/electron/events";
 import { getDesktopHost } from "@/desktop/host";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 
 interface OpenAgentEventPayload {
   serverId?: unknown;
   agentId?: unknown;
+  workspaceId?: unknown;
+  terminalId?: unknown;
+}
+
+function readId(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 export function AgentNavigationListener() {
   const openAgent = useStableEvent((payload: OpenAgentEventPayload | null) => {
-    const serverId = typeof payload?.serverId === "string" ? payload.serverId.trim() : "";
-    const agentId = typeof payload?.agentId === "string" ? payload.agentId.trim() : "";
-    if (!serverId || !agentId) {
+    const serverId = readId(payload?.serverId);
+    if (!serverId) {
       return;
     }
-    navigateToAgent({ serverId, agentId });
+    const workspaceId = readId(payload?.workspaceId);
+    const terminalId = readId(payload?.terminalId);
+    if (workspaceId && terminalId) {
+      navigateToWorkspace({ serverId, workspaceId, target: { kind: "terminal", terminalId } });
+      return;
+    }
+    const agentId = readId(payload?.agentId);
+    if (agentId) {
+      navigateToAgent({ serverId, agentId });
+    }
   });
 
   useEffect(() => {

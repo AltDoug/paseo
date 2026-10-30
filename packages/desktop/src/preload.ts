@@ -38,10 +38,11 @@ contextBridge.exposeInMainWorld("paseoDesktop", {
     ipcRenderer.invoke("paseo:get-pending-open-project") as Promise<string | null>,
   agentNavigation: {
     ready: () =>
-      ipcRenderer.invoke("paseo:agent-navigation:ready") as Promise<{
-        serverId: string;
-        agentId: string;
-      } | null>,
+      ipcRenderer.invoke("paseo:agent-navigation:ready") as Promise<
+        | { serverId: string; agentId: string }
+        | { serverId: string; workspaceId: string; terminalId: string }
+        | null
+      >,
   },
   events: {
     on: (event: string, handler: EventHandler): Promise<() => void> => {
