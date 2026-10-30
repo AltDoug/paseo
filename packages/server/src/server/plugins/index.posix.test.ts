@@ -1090,7 +1090,7 @@ export default function contribute(plugin: unknown) {
       // Observe recovery itself. Reloading here restarts a healthy plugin and
       // would also conceal a failure to restart it after the global enable.
       await expect
-        .poll(() => service.listPlugins(), { timeout: 20_000 })
+        .poll(() => service.listPlugins(), { timeout: 10_000 })
         .toMatchObject([
           { id: "first", status: "running" },
           { id: "second", status: "running" },
