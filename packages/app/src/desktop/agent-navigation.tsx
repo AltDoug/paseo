@@ -4,33 +4,19 @@ import { getDesktopHost } from "@/desktop/host";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
-
-interface OpenAgentEventPayload {
-  serverId?: unknown;
-  agentId?: unknown;
-  workspaceId?: unknown;
-  terminalId?: unknown;
-}
-
-function readId(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
+import { readDesktopNavigationTarget } from "./desktop-navigation-target";
 
 export function AgentNavigationListener() {
-  const openAgent = useStableEvent((payload: OpenAgentEventPayload | null) => {
-    const serverId = readId(payload?.serverId);
-    if (!serverId) {
-      return;
-    }
-    const workspaceId = readId(payload?.workspaceId);
-    const terminalId = readId(payload?.terminalId);
-    if (workspaceId && terminalId) {
-      navigateToWorkspace({ serverId, workspaceId, target: { kind: "terminal", terminalId } });
-      return;
-    }
-    const agentId = readId(payload?.agentId);
-    if (agentId) {
-      navigateToAgent({ serverId, agentId });
+  const openAgent = useStableEvent((payload: unknown) => {
+    const target = readDesktopNavigationTarget(payload);
+    if (target?.kind === "terminal") {
+      navigateToWorkspace({
+        serverId: target.serverId,
+        workspaceId: target.workspaceId,
+        target: { kind: "terminal", terminalId: target.terminalId },
+      });
+    } else if (target?.kind === "agent") {
+      navigateToAgent({ serverId: target.serverId, agentId: target.agentId });
     }
   });
 
@@ -48,7 +34,7 @@ export function AgentNavigationListener() {
     const connect = async () => {
       let dispose: (() => void) | null = null;
       try {
-        dispose = await listenToDesktopEvent<OpenAgentEventPayload>("open-agent", openAgent);
+        dispose = await listenToDesktopEvent<unknown>("open-agent", openAgent);
         if (disposed) {
           dispose();
           return;

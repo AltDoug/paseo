@@ -109,10 +109,12 @@ export function parseAgentDeepLink(input: string): AgentDeepLinkTarget | null {
   if (!decoded) {
     return null;
   }
-  const [serverId, agentId] = decoded;
-  return serverId && agentId ? { serverId, agentId } : null;
+  const [serverId = "", agentId = ""] = decoded;
+  return { serverId, agentId };
 }
 
+// `paseo://h/<serverId>/workspace/<workspaceId>/terminal/<terminalId>`. The
+// workspace segment uses the same form as the app's workspace route.
 export function parseTerminalDeepLink(input: string): TerminalDeepLinkTarget | null {
   const segments = parseHostDeepLinkSegments(input);
   if (
@@ -128,8 +130,8 @@ export function parseTerminalDeepLink(input: string): TerminalDeepLinkTarget | n
   if (!decoded) {
     return null;
   }
-  const [serverId, workspaceId, terminalId] = decoded;
-  return serverId && workspaceId && terminalId ? { serverId, workspaceId, terminalId } : null;
+  const [serverId = "", workspaceId = "", terminalId = ""] = decoded;
+  return { serverId, workspaceId, terminalId };
 }
 
 export function parseDesktopDeepLink(input: string): DesktopDeepLinkTarget | null {
